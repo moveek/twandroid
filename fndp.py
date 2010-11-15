@@ -65,18 +65,30 @@ def find_package(setup, found_package):
 
         return package
 
-def scrap():
-    package = find_package(setup, find_packages(exclude=get_exclude_dirs(setup)))
-
-    if package == []:
-        print "No modules found in current directory"
-        for d in get_dirs():
-            os.chdir(d)
-            find_package(setup_file)
-
 def copy_package(setup):
-    print "cur dir: %s" % os.getcwd()
+    """
+    Find and copy the package files to the install target.
+    If modules of the same package exist across multiple directories
+    in the same namespace, all the files are installed into the same package directory
+    in the install target.
 
+    e.g. If package mypkg has module1 and module2 in separate directories:
+            src/
+              mypkg.module1/
+                mypkg/
+                  module1
+                  ..
+              mypkg.module2/
+                mypkg/
+                  module2
+                  ..
+              ..
+         The modules will be copied into the same package directory at the target:
+            mypkg/ 
+              module1
+              module2
+              ..
+    """
     top_level_package = find_package(setup, find_packages(exclude=get_exclude_dirs(setup)))
     print "package is: %s" % top_level_package
     try:
@@ -85,7 +97,7 @@ def copy_package(setup):
         os.stat(install_target)
 
         # If we get here, the install_target already exists. This means
-        # The package is already partly installed and we need to copy
+        # The package is already partly installed and we need to copy 
         # modules into it.
         copy_into(top_level_package, install_target)
 
@@ -94,14 +106,19 @@ def copy_package(setup):
         shutil.copytree(top_level_package, install_target)
         
 def copy_single_module(module_name):
+    """
+    Copy a single module to the install target.
+    """
     py_module = module_name.group(1) + ".py" 
-    print "py_module: %s" % py_module
     absolute_module_path = get_absolute_path(py_module)
     shutil.copy(absolute_module_path, TARGET_DIR)
     print "copied: %s" % py_module
 
 def copy_modules_and_packages(setup):
-    # Check for single modules that need to be installed
+    """
+    Copy both packages and individual modules to the target
+    """
+    # Check setup.py for single modules that need to be installed
     module_name = re.search("py_modules=\['(\w+)'\]", setup)
     if module_name:
         copy_single_module(module_name)
@@ -109,6 +126,9 @@ def copy_modules_and_packages(setup):
         copy_package(setup)
 
 def read_setup():
+    """
+    Read setup.py. Later used to find out about the package structure.
+    """
     if os.listdir('.').count('setup.py') != 0:
         return open('setup.py', 'r').read()
 
@@ -118,8 +138,6 @@ def get_absolute_path(path):
 def get_install_target(package):
     return os.path.join(TARGET_DIR, package) 
             
-modules = []
-
 def install():
     for d in get_dirs():
 
@@ -127,14 +145,13 @@ def install():
         print "dir: %s" % d
         print "contents: %s" % os.listdir('.')
 
-        # Open setup.py if one exists. If not, skip the directory.
         setup = read_setup()
         if setup:
             copy_modules_and_packages(setup)
         
         os.chdir("../")
 
-        print "search done"
+        print "package installed"
         raw_input()    
     
 install()
