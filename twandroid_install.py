@@ -1,22 +1,82 @@
 #!/usr/bin/python2
+"""
+    twandroid_install.py
 
+    Provides a function to install python packages 
+    and modules under the Scripting Layer for Android (SL4A). 
+
+    This script makes use of two functions: find_packages() and 
+    convert_path() lifted directly from setuptools and 
+    distutils.util respectively.
+
+"""
 import sys
 import os
 import re
 import shutil
-from setuptools import find_packages
 
-#TARGET_DIR = os.path.join(os.getcwd(), 'target')
+# Location of extra python libraries. Additional
+# packages should be installed here.
 PYTHON_FOR_ANDROID='com.googlecode.pythonforandroid'
 TARGET_DIR = find_install_target()
+#TARGET_DIR = os.path.join(os.getcwd(), 'target')
 
 print "target: %s" % TARGET_DIR
 
 def find_install_target():
+    """Check sys.path to find out where python_extras are installed"""
     return [ path for path in sys.path if path.find(PYTHON_FOR_ANDROID) != -1 ][0]
 
-def get_dirs(in_dir='.'):
-    return [ name for name in os.listdir(in_dir) if os.path.isdir(os.path.join(in_dir, name)) ]
+# Lifted from setuptools
+def find_packages(where='.', exclude=()):
+    """Return a list all Python packages found within directory 'where'
+
+    'where' should be supplied as a "cross-platform" (i.e. URL-style) path; it
+    will be converted to the appropriate local path syntax.  'exclude' is a
+    sequence of package names to exclude; '*' can be used as a wildcard in the
+    names, such that 'foo.*' will exclude all subpackages of 'foo' (but not
+    'foo' itself).
+    """
+    out = []
+    stack=[(convert_path(where), '')]
+    while stack:
+        where,prefix = stack.pop(0)
+        for name in os.listdir(where):
+            fn = os.path.join(where,name)
+            if ('.' not in name and os.path.isdir(fn) and
+                os.path.isfile(os.path.join(fn,'__init__.py'))
+            ):
+                out.append(prefix+name); stack.append((fn,prefix+name+'.'))
+    for pat in list(exclude)+['ez_setup', 'distribute_setup']:
+        from fnmatch import fnmatchcase
+        out = [item for item in out if not fnmatchcase(item,pat)]
+    return out
+
+# Lifted from distutils.util--required by find_packages()
+def convert_path (pathname):
+    """Return 'pathname' as a name that will work on the native filesystem,
+    i.e. split it on '/' and put it back together again using the current
+    directory separator.  Needed because filenames in the setup script are
+    always supplied in Unix style, and have to be converted to the local
+    convention before we can actually use them in the filesystem.  Raises
+    ValueError on non-Unix-ish systems if 'pathname' either starts or
+    ends with a slash.
+    """
+    if os.sep == '/':
+        return pathname
+    if not pathname:
+        return pathname
+    if pathname[0] == '/':
+        raise ValueError, "path '%s' cannot be absolute" % pathname
+    if pathname[-1] == '/':
+        raise ValueError, "path '%s' cannot end with '/'" % pathname
+
+    paths = string.split(pathname, '/')
+    while '.' in paths:
+        paths.remove('.')
+    if not paths:
+        return os.curdir
+    return os.path.join(*paths)
 
 def get_exclude_dirs(setup_file):
     """ 
@@ -132,6 +192,9 @@ def read_setup():
     if os.listdir('.').count('setup.py') != 0:
         return open('setup.py', 'r').read()
 
+def get_dirs(in_dir='.'):
+    return [ name for name in os.listdir(in_dir) if os.path.isdir(os.path.join(in_dir, name)) ]
+
 def get_absolute_path(path):
     return os.path.join(os.getcwd(), path)
 
@@ -148,10 +211,13 @@ def install():
         setup = read_setup()
         if setup:
             copy_modules_and_packages(setup)
+            print "package installed"
+        else:
+            print "not a python package: skipping..."
+            
         
         os.chdir("../")
 
-        print "package installed"
         raw_input()    
     
 install()
